@@ -1,0 +1,374 @@
+import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import CodeBlock from '../components/CodeBlock';
+import { api } from '../mockApi';
+import { validate } from '../utils/validation';
+
+// ── Before: manual form state ─────────────────────────
+function BeforeCreateForm() {
+  const [name,  setName]  = useState('');
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState(null);
+  const [success, setSuccess] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    setLoading(true);
+    try {
+      const result = await api.createUser({ name, email });
+      setSuccess(`Created: ${result.name} (id=${result.id})`);
+      setName('');
+      setEmail('');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div className="form-group">
+        <label>Name</label>
+        <input className="form-control" value={name} onChange={(e) => setName(e.target.value)} placeholder="Alice Johnson" />
+      </div>
+      <div className="form-group">
+        <label>Email</label>
+        <input className="form-control" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="alice@acme.com" />
+      </div>
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <button type="submit" className="btn btn-primary" disabled={loading}>
+          {loading ? <><span className="spinner" style={{ display: 'inline-block', marginRight: 6, width: 12, height: 12, borderWidth: 1.5 }} />Saving…</> : 'Create User'}
+        </button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setName(''); setEmail(''); setError(null); setSuccess(null); }}>
+          ↺ Reset Form
+        </button>
+      </div>
+      {error   && <div className="error-box"   style={{ marginTop: '0.5rem' }}>{error}</div>}
+      {success && <div className="success-box" style={{ marginTop: '0.5rem' }}>{success}</div>}
+    </form>
+  );
+}
+
+// ── After: useMutation ───────────────────────────────
+function AfterCreateForm() {
+  const [name,  setName]  = useState('');
+  const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState(null);
+
+  const validateEmail = (value) => {
+    const err = validate.email(value);
+    setEmailError(err);
+    return err === null;
+  };
+
+  const createUser = useMutation({
+    mutationFn: (newUser) => api.createUser(newUser),
+    onSuccess: () => {
+      setName('');
+      setEmail('');
+      setEmailError(null);
+    },
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (email && !validateEmail(email)) return;
+    createUser.mutate({ name, email });
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div className="form-group">
+        <label>Name</label>
+        <input className={`form-control${createUser.isError ? ' is-error' : ''}`} value={name} onChange={(e) => setName(e.target.value)} placeholder="Alice Johnson" />
+      </div>
+      <div className="form-group">
+        <label>Email</label>
+        <input
+          className={`form-control${emailError ? ' is-error' : ''}`}
+          value={email}
+          onChange={(e) => { setEmail(e.target.value); if (emailError) validateEmail(e.target.value); }}
+          placeholder="alice@acme.com"
+        />
+        {emailError && <span className="field-error">{emailError}</span>}
+      </div>
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <button type="submit" className="btn btn-primary" disabled={createUser.isPending}>
+          {createUser.isPending ? <><span className="spinner" style={{ display: 'inline-block', marginRight: 6, width: 12, height: 12, borderWidth: 1.5 }} />Saving…</> : 'Create User'}
+        </button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => { createUser.reset(); setName(''); setEmail(''); setEmailError(null); }}>
+          ↺ Reset State
+        </button>
+        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+          Status: <strong>{createUser.status}</strong>
+        </span>
+      </div>
+      {createUser.isError && (
+        <div className="error-box" style={{ marginTop: '0.5rem' }}>{createUser.error.message}</div>
+      )}
+      {createUser.isSuccess && (
+        <div className="success-box" style={{ marginTop: '0.5rem' }}>
+          Created: {createUser.data.name} (id={createUser.data.id})
+        </div>
+      )}
+    </form>
+  );
+}
+
+// ── Error demo: submit invalid data ──────────────────
+function ErrorDemo() {
+  const mut = useMutation({
+    mutationFn: () => api.createUser({ name: '' }),  // always fails
+  });
+  return (
+    <div>
+      <div style={{ fontSize: '0.8rem', color: '#6b7280', marginBottom: '0.5rem' }}>
+        Try submitting empty name (will fail):
+      </div>
+      <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <button className="btn btn-danger btn-sm" onClick={() => mut.mutate()} disabled={mut.isPending}>
+          {mut.isPending ? 'Sending…' : 'Submit invalid data'}
+        </button>
+        {(mut.isError || mut.isSuccess) && (
+          <button className="btn btn-ghost btn-sm" onClick={() => mut.reset()}>
+            ↺ Reset
+          </button>
+        )}
+      </div>
+      {mut.isError && (
+        <div className="error-box" style={{ marginTop: '0.5rem' }}>
+          ❌ {mut.error.message}
+        </div>
+      )}
+      {!mut.isIdle && !mut.isPending && !mut.isError && <div className="success-box" style={{ marginTop: '0.5rem' }}>✓ Success</div>}
+    </div>
+  );
+}
+
+export default function TopicB1Page() {
+  return (
+    <div className="page">
+      <div className="page-header">
+        <span className="badge badge-group-b">Group B · Topic 1</span>
+        <h1>useMutation Fundamentals</h1>
+        <p>
+          <code>useQuery</code> reads data. <code>useMutation</code> writes it. Same ergonomics —
+          loading states, error handling, and success callbacks all built in.
+        </p>
+      </div>
+
+      {/* Plain explanation */}
+      <div style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 8, padding: '0.875rem 1.1rem', margin: '1.25rem 0', fontSize: '0.85rem' }}>
+        <strong style={{ color: '#92400e', display: 'block', marginBottom: '0.35rem' }}>💡 What useMutation does</strong>
+        <p style={{ color: '#78350f', lineHeight: 1.7 }}>
+          <code>useQuery</code> reads data from the server. <code>useMutation</code> sends data to the server — creating, updating, or deleting something.
+          <strong> Without useMutation</strong>: you need 3 separate <code>useState</code> variables (loading, error, success) plus a <code>try/catch</code> block every time you submit a form.
+          <strong> With useMutation</strong>: <code>isPending</code>, <code>isError</code>, and <code>isSuccess</code> are provided automatically — no manual state needed.
+          You also get callback functions (<code>onSuccess</code>, <code>onError</code>) that run after the action finishes.
+          The <strong>"Reset State"</strong> button calls <code>mutation.reset()</code>, which clears all the state back to idle so the form can be used again.
+        </p>
+      </div>
+
+      {/* Comparison */}
+      <h2 className="section-title">Before vs After — Create User Form</h2>
+      <div className="comparison-grid">
+        <div className="panel before-panel">
+          <div className="panel-header">
+            <span className="before-badge">Before</span>
+            <h3>Manual async + try/catch state</h3>
+          </div>
+
+          {/* Before explanation */}
+          <div className="panel-section" style={{ background: '#fff8f8' }}>
+            <div className="panel-label">What this means</div>
+            <p style={{ fontSize: '0.85rem', color: '#374151', lineHeight: 1.65 }}>
+              Submitting a form manually requires: a loading flag, an error state, a success state, and a try/catch/finally block.
+              <strong> That's 3 useState declarations + try/catch just to handle one async action.</strong>
+              Every form in your app repeats this exact pattern. The "Reset Form" button is manual cleanup code you have to write yourself.
+            </p>
+          </div>
+
+          <div className="panel-section">
+            <div className="panel-label">Code</div>
+            <CodeBlock code={`function CreateUserForm() {
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState(null);
+  const [success, setSuccess] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    setLoading(true);
+    try {
+      const result = await api.createUser(data);
+      setSuccess(\`Created: \${result.name}\`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {/* inputs */}
+      <button disabled={loading}>
+        {loading ? 'Saving...' : 'Create'}
+      </button>
+      {error   && <p className="error">{error}</p>}
+      {success && <p className="ok">{success}</p>}
+    </form>
+  );
+}`} />
+          </div>
+          <div className="demo-area">
+            <div className="panel-label">Live Demo</div>
+            <BeforeCreateForm />
+          </div>
+        </div>
+
+        <div className="panel after-panel">
+          <div className="panel-header">
+            <span className="after-badge">After</span>
+            <h3>useMutation — state & callbacks included</h3>
+          </div>
+
+          {/* After explanation */}
+          <div className="panel-section" style={{ background: '#f0fdf4' }}>
+            <div className="panel-label">What this means</div>
+            <p style={{ fontSize: '0.85rem', color: '#374151', lineHeight: 1.65 }}>
+              <code>useMutation</code> gives you <code>isPending</code>, <code>isError</code>, <code>isSuccess</code>, and <code>error</code> automatically — no useState needed for those.
+              You also get lifecycle callbacks (<code>onSuccess</code>, <code>onError</code>, <code>onSettled</code>) to run logic after the action.
+              <strong> The "Reset State" button calls <code>mutation.reset()</code> — TanStack Query clears all state for you in one call.</strong>
+              Watch the "Status" label change as you submit.
+            </p>
+          </div>
+
+          <div className="panel-section">
+            <div className="panel-label">Code</div>
+            <CodeBlock code={`import { useMutation } from '@tanstack/react-query';
+
+function CreateUserForm() {
+  const createUser = useMutation({
+    mutationFn: (newUser) =>
+      api.createUser(newUser),
+
+    onMutate: (variables) => {
+      // called immediately when mutate() fires
+      // use for optimistic updates
+    },
+    onSuccess: (data, variables, context) => {
+      // called when mutationFn resolves
+      console.log('Created:', data);
+    },
+    onError: (error, variables, context) => {
+      // called when mutationFn throws
+      console.error(error);
+    },
+    onSettled: (data, error) => {
+      // called after success OR error
+    },
+  });
+
+  return (
+    <form onSubmit={e => {
+      e.preventDefault();
+      createUser.mutate({ name, email });
+    }}>
+      <button disabled={createUser.isPending}>
+        {createUser.isPending
+          ? 'Saving...'
+          : 'Create User'}
+      </button>
+      {/* Reset back to idle state: */}
+      <button onClick={() => createUser.reset()}>
+        ↺ Reset State
+      </button>
+      {createUser.isError && (
+        <p>{createUser.error.message}</p>
+      )}
+      {createUser.isSuccess && (
+        <p>Created: {createUser.data.name}</p>
+      )}
+    </form>
+  );
+}`} />
+          </div>
+          <div className="demo-area">
+            <div className="panel-label">Live Demo</div>
+            <AfterCreateForm />
+          </div>
+        </div>
+      </div>
+
+      {/* Error demo */}
+      <h2 className="section-title">Error State Demo</h2>
+      <div className="insight">
+        <strong>Important:</strong> Never show mutation errors in <code>console.error</code> only —
+        always surface them in the UI. <code>isError</code> + <code>error.message</code> makes this trivial.
+        Use <code>mutation.reset()</code> to clear the error so the user can try again.
+      </div>
+
+      <div style={{ background: 'white', border: '1.5px solid var(--border)', borderRadius: 8, padding: '1rem', maxWidth: 400 }}>
+        <ErrorDemo />
+      </div>
+
+      {/* mutate vs mutateAsync */}
+      <h2 className="section-title">mutate vs mutateAsync</h2>
+      <div className="comparison-grid">
+        <div className="panel before-panel">
+          <div className="panel-header">
+            <span className="before-badge">mutate</span>
+            <h3>Fire and forget (recommended)</h3>
+          </div>
+          <div className="panel-section">
+            <CodeBlock code={`// Use mutate() for most cases.
+// Errors are caught by onError callback.
+// Does NOT return a promise.
+
+const handleSubmit = () => {
+  createUser.mutate(formData);
+  // execution continues immediately
+};`} />
+          </div>
+        </div>
+        <div className="panel after-panel">
+          <div className="panel-header">
+            <span className="after-badge">mutateAsync</span>
+            <h3>Awaitable (for sequential logic)</h3>
+          </div>
+          <div className="panel-section">
+            <CodeBlock code={`// Use mutateAsync() when you need to
+// chain operations or await the result.
+// You must catch errors manually.
+
+const handleSubmit = async () => {
+  try {
+    const user = await createUser
+      .mutateAsync(formData);
+    // user is the resolved value
+    await navigateTo(\`/users/\${user.id}\`);
+  } catch (err) {
+    toast.error(err.message);
+  }
+};`} />
+          </div>
+        </div>
+      </div>
+
+      <div className="pitfalls-box">
+        <h3>Note for the next demo</h3>
+        <ul>
+          <li>After creating a user, the list does NOT automatically refresh yet</li>
+          <li>That's what cache invalidation fixes — Topic B2</li>
+          <li>Without invalidation, the cache is stale and shows the old list</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
