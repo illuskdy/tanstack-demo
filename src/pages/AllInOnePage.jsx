@@ -59,7 +59,11 @@ function EditUserForm({ user, onDone }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     const errs = validateUserForm({ name, email });
-    if (hasErrors(errs)) { setErrors(errs); return; }
+    if (hasErrors(errs)) {
+      setErrors(errs);
+      console.error('Form validation failed:', errs);
+      return;
+    }
     updateUser.mutate({ id: user.id, data: { name, email, role, dept } }, {
       onSuccess: onDone,
     });
@@ -132,7 +136,11 @@ function CreateUserForm({ onDone }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     const errs = validateUserForm({ name, email });
-    if (hasErrors(errs)) { setErrors(errs); return; }
+    if (hasErrors(errs)) {
+      setErrors(errs);
+      console.error('Form validation failed:', errs);
+      return;
+    }
     createUser.mutate({ name, email, role, dept }, {
       onSuccess: () => { setName(''); setEmail(''); setDept(''); setErrors({}); onDone(); },
     });
