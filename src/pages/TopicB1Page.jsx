@@ -154,15 +154,29 @@ function AfterCreateForm() {
     return err === null;
   };
 
+  // useMutation manages the lifecycle of a single write operation (POST/PUT/DELETE).
+  // It exposes `isPending`, `isError`, `isSuccess` states and a `mutate()` trigger.
   const createUser = useMutation({
+    // mutationKey labels this mutation in DevTools. Not used for deduplication
+    // the way queryKey is — mutations never share a cache entry.
     mutationKey: ['b1-createUser'],
+
+    // mutationFn is called when `createUser.mutate(newUser)` fires (see handleSubmit).
+    // It must return a promise; TanStack Query uses it to track pending/success/error state.
     mutationFn: (newUser) => api.createUser(newUser),
+
+    // onSuccess fires after the API call resolves. Notice there is no
+    // invalidateQueries call here — this is intentional for the B1 demo,
+    // which shows the manual-refresh pattern instead of auto-invalidation.
+    // The list must be refreshed by hand; setListStale signals that to the UI.
     onSuccess: () => {
       setName('');
       setEmail('');
       setEmailError(null);
       setListStale(true); // still stale — cache invalidation (B2) will fix this
     },
+    // No onError handler here — createUser.isError / createUser.error can be
+    // read directly in JSX instead of pushing state into separate useState calls.
   });
 
   const handleSubmit = (e) => {

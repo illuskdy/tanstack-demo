@@ -135,10 +135,23 @@ function AfterUserList() {
     return err === null;
   };
 
+  // useMutation handles server-side write operations (POST/PUT/DELETE).
+  // Unlike useQuery, mutations don't run automatically — they fire only when
+  // you explicitly call `createUser.mutate(data)`.
   const createUser = useMutation({
+    // mutationKey identifies this mutation in DevTools and lets other code
+    // observe or cancel it via queryClient. Optional but useful for debugging.
     mutationKey: ['b2-createUser'],
+
+    // mutationFn is the async function that performs the actual API call.
+    // The argument passed to `mutate(data)` flows in here as `data`.
     mutationFn: (data) => api.createUser(data),
+
+    // onSuccess fires after mutationFn resolves. The first argument is the
+    // value the promise resolved with (the server response).
     onSuccess: (created) => {
+      // invalidateQueries marks the 'b2-users' cache as stale, triggering
+      // an automatic background refetch so the list reflects the new record.
       queryClient.invalidateQueries({ queryKey: ['b2-users'] });
       setMsg(`✓ "${created.name}" added — list auto-refreshed!`);
       setMsgType('success');
@@ -146,6 +159,9 @@ function AfterUserList() {
       setEmail('');
       setEmailError(null);
     },
+
+    // onError fires if mutationFn throws or rejects. `error` is whatever
+    // the promise rejected with (typically an Error instance).
     onError: (error) => {
       setMsg(`❌ Create failed: ${error.message}`);
       setMsgType('error');
@@ -153,10 +169,17 @@ function AfterUserList() {
     },
   });
 
+  // Each useMutation call is independent — TanStack Query tracks their
+  // loading/error/success states separately, so UI can react per-operation.
   const deleteUser = useMutation({
     mutationKey: ['b2-deleteUser'],
+
+    // mutationFn receives the user id passed to `deleteUser.mutate(id)`.
     mutationFn: (id) => api.deleteUser(id),
+
     onSuccess: () => {
+      // Same pattern: invalidate so the list refetches and the deleted
+      // row disappears without a manual page reload.
       queryClient.invalidateQueries({ queryKey: ['b2-users'] });
       setMsg('✓ Deleted — list auto-refreshed!');
       setMsgType('success');
@@ -170,11 +193,17 @@ function AfterUserList() {
 
   const updateUser = useMutation({
     mutationKey: ['b2-updateUser'],
+
+    // mutationFn destructures the object passed to `updateUser.mutate({ id, data })`.
+    // Grouping arguments into one object is the idiomatic way to pass multiple
+    // values since useMutation's mutate() only accepts a single argument.
     mutationFn: ({ id, data }) => api.updateUser(id, data),
+
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['b2-users'] });
       setMsg(`✓ "${updated.name}" updated — list auto-refreshed!`);
       setMsgType('success');
+      // Reset edit state after a successful update so the inline form closes.
       setEditingId(null);
       setEditName('');
     },
