@@ -12,6 +12,8 @@ function BeforeUserList() {
   const [name,  setName]     = useState('');
   const [msg, setMsg]        = useState('');
   const [staleWarning, setStaleWarning] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName]   = useState('');
 
   useState(() => {
     api.getUsers().then((d) => { setUsers(d); setLL(false); });
@@ -44,6 +46,16 @@ function BeforeUserList() {
     setStaleWarning(true);
   };
 
+  const handleEditStart = (u) => { setEditingId(u.id); setEditName(u.name); };
+  const handleEditCancel = () => { setEditingId(null); setEditName(''); };
+  const handleEditSave = async (id) => {
+    await api.updateUser(id, { name: editName });
+    setMsg('Updated — list is STALE. Click Refresh.');
+    setStaleWarning(true);
+    setEditingId(null);
+    setEditName('');
+  };
+
   return (
     <div>
       {staleWarning && (
@@ -66,10 +78,24 @@ function BeforeUserList() {
             <thead><tr><th>Name</th><th>Dept</th><th></th></tr></thead>
             <tbody>{users.map((u) => (
               <tr key={u.id}>
-                <td>{u.name}</td>
-                <td>{u.dept}</td>
                 <td>
-                  <button className="btn btn-danger btn-xs" onClick={() => handleDelete(u.id)}>✕</button>
+                  {editingId === u.id
+                    ? <input className="form-control" style={{ maxWidth: 120 }} value={editName} onChange={(e) => setEditName(e.target.value)} />
+                    : u.name}
+                </td>
+                <td>{u.dept}</td>
+                <td style={{ display: 'flex', gap: 4 }}>
+                  {editingId === u.id ? (
+                    <>
+                      <button className="btn btn-primary btn-xs" onClick={() => handleEditSave(u.id)}>✓</button>
+                      <button className="btn btn-outline btn-xs" onClick={handleEditCancel}>✕</button>
+                    </>
+                  ) : (
+                    <>
+                      <button className="btn btn-outline btn-xs" onClick={() => handleEditStart(u)}>✎</button>
+                      <button className="btn btn-danger btn-xs" onClick={() => handleDelete(u.id)}>✕</button>
+                    </>
+                  )}
                 </td>
               </tr>
             ))}</tbody>
@@ -86,7 +112,10 @@ function AfterUserList() {
   const [name,  setName]  = useState('');
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState(null);
-  const [msg, setMsg]     = useState('');
+  const [msg, setMsg]         = useState('');
+  const [msgType, setMsgType] = useState('success');
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName]   = useState('');
 
   const [, tick] = useState(0);
   useEffect(() => {
@@ -112,11 +141,16 @@ function AfterUserList() {
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['b2-users'] });
       setMsg(`✓ "${created.name}" added — list auto-refreshed!`);
+      setMsgType('success');
       setName('');
       setEmail('');
       setEmailError(null);
     },
-    onError: (e) => setMsg(`Error: ${e.message}`),
+    onError: (error) => {
+      setMsg(`❌ Create failed: ${error.message}`);
+      setMsgType('error');
+      console.error('[createUser] onError fired:', error);
+    },
   });
 
   const deleteUser = useMutation({
@@ -125,19 +159,44 @@ function AfterUserList() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['b2-users'] });
       setMsg('✓ Deleted — list auto-refreshed!');
+      setMsgType('success');
+    },
+    onError: (error) => {
+      setMsg(`❌ Delete failed: ${error.message}`);
+      setMsgType('error');
+      console.error('[deleteUser] onError fired:', error);
     },
   });
 
+  const updateUser = useMutation({
+    mutationKey: ['b2-updateUser'],
+    mutationFn: ({ id, data }) => api.updateUser(id, data),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ['b2-users'] });
+      setMsg(`✓ "${updated.name}" updated — list auto-refreshed!`);
+      setMsgType('success');
+      setEditingId(null);
+      setEditName('');
+    },
+    onError: (error) => {
+      setMsg(`❌ Update failed: ${error.message}`);
+      setMsgType('error');
+    },
+  });
+
+  const handleEditStart = (u) => { setEditingId(u.id); setEditName(u.name); };
+  const handleEditCancel = () => { setEditingId(null); setEditName(''); };
+
   const handleAdd = () => {
-    if (!name.trim()) return;
     // Validate email before submitting — catch invalid format
-    if (!validateEmail(email)) return;
+    if (email && !validateEmail(email)) return;
+    // Empty name is allowed through so the API throws and onError fires
     createUser.mutate({ name, email: email.trim() || undefined });
   };
 
   return (
     <div>
-      {msg && <div className="success-box" style={{ marginBottom: '0.65rem' }}>{msg}</div>}
+      {msg && <div className={msgType === 'error' ? 'error-box' : 'success-box'} style={{ marginBottom: '0.65rem' }}>{msg}</div>}
 
       {/* Name + Email inputs */}
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.25rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
@@ -185,14 +244,32 @@ function AfterUserList() {
             <thead><tr><th>Name</th><th>Dept</th><th></th></tr></thead>
             <tbody>{users.map((u) => (
               <tr key={u.id}>
-                <td>{u.name}</td>
-                <td>{u.dept}</td>
                 <td>
-                  <button
-                    className="btn btn-danger btn-xs"
-                    onClick={() => deleteUser.mutate(u.id)}
-                    disabled={deleteUser.isPending}
-                  >✕</button>
+                  {editingId === u.id
+                    ? <input className="form-control" style={{ maxWidth: 120 }} value={editName} onChange={(e) => setEditName(e.target.value)} />
+                    : u.name}
+                </td>
+                <td>{u.dept}</td>
+                <td style={{ display: 'flex', gap: 4 }}>
+                  {editingId === u.id ? (
+                    <>
+                      <button
+                        className="btn btn-primary btn-xs"
+                        onClick={() => updateUser.mutate({ id: u.id, data: { name: editName } })}
+                        disabled={updateUser.isPending}
+                      >{updateUser.isPending ? '…' : '✓'}</button>
+                      <button className="btn btn-outline btn-xs" onClick={handleEditCancel}>✕</button>
+                    </>
+                  ) : (
+                    <>
+                      <button className="btn btn-outline btn-xs" onClick={() => handleEditStart(u)}>✎</button>
+                      <button
+                        className="btn btn-danger btn-xs"
+                        onClick={() => deleteUser.mutate(u.id)}
+                        disabled={deleteUser.isPending}
+                      >✕</button>
+                    </>
+                  )}
                 </td>
               </tr>
             ))}</tbody>
@@ -362,6 +439,9 @@ function UserList() {
           <div className="demo-area">
             <div className="panel-label">
               Live Demo — list auto-refreshes. Try typing <code>bad@</code> as email to see validation.
+            </div>
+            <div style={{ fontSize: '0.75rem', color: '#6b7280', background: '#f9fafb', border: '1px dashed #d1d5db', borderRadius: 5, padding: '0.4rem 0.65rem', marginBottom: '0.65rem' }}>
+              <strong style={{ color: '#374151' }}>DevTools hint:</strong> open the browser Console — when a mutation fails, <code>onError</code> logs <code>[createUser] onError fired</code> / <code>[deleteUser] onError fired</code>. You can also see the error object on the mutation in the TanStack Query DevTools panel.
             </div>
             <AfterUserList />
           </div>

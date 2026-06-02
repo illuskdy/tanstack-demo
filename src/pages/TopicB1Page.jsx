@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import CodeBlock from '../components/CodeBlock';
 import { api } from '../mockApi';
@@ -41,11 +41,19 @@ function MutationStateBadge({ status }) {
 
 // ── Before: manual form state ─────────────────────────
 function BeforeCreateForm() {
-  const [name,  setName]  = useState('');
-  const [email, setEmail] = useState('');
+  const [name,    setName]    = useState('');
+  const [email,   setEmail]   = useState('');
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState(null);
   const [success, setSuccess] = useState(null);
+
+  const [users,       setUsers]       = useState([]);
+  const [listLoading, setListLoading] = useState(true);
+  const [listStale,   setListStale]   = useState(false);
+
+  useEffect(() => {
+    api.getUsers().then((data) => { setUsers(data); setListLoading(false); });
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -57,6 +65,7 @@ function BeforeCreateForm() {
       setSuccess(`Created: ${result.name} (id=${result.id})`);
       setName('');
       setEmail('');
+      setListStale(true); // ← list is now out of date; we don't know to update it
     } catch (err) {
       setError(err.message);
     } finally {
@@ -64,27 +73,64 @@ function BeforeCreateForm() {
     }
   };
 
+  const refreshList = () => {
+    setListLoading(true);
+    setListStale(false);
+    api.getUsers().then((data) => { setUsers(data); setListLoading(false); });
+  };
+
   return (
-    <form onSubmit={handleSubmit}>
-      <div className="form-group">
-        <label>Name</label>
-        <input className="form-control" value={name} onChange={(e) => setName(e.target.value)} placeholder="Alice Johnson" />
+    <div>
+      <form onSubmit={handleSubmit}>
+        <div className="form-group">
+          <label>Name</label>
+          <input className="form-control" value={name} onChange={(e) => setName(e.target.value)} placeholder="Alice Johnson" />
+        </div>
+        <div className="form-group">
+          <label>Email</label>
+          <input className="form-control" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="alice@acme.com" />
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            {loading ? <><span className="spinner" style={{ display: 'inline-block', marginRight: 6, width: 12, height: 12, borderWidth: 1.5 }} />Saving…</> : 'Create User'}
+          </button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setName(''); setEmail(''); setError(null); setSuccess(null); }}>
+            ↺ Reset Form
+          </button>
+        </div>
+        {error   && <div className="error-box"   style={{ marginTop: '0.5rem' }}>{error}</div>}
+        {success && <div className="success-box" style={{ marginTop: '0.5rem' }}>{success}</div>}
+      </form>
+
+      <div style={{ marginTop: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Users ({users.length})
+          </div>
+          <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem', padding: '0.15rem 0.5rem' }} onClick={refreshList}>
+            ↻ Refresh List
+          </button>
+        </div>
+        {listStale && (
+          <div style={{ fontSize: '0.75rem', color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 5, padding: '0.35rem 0.65rem', marginBottom: '0.4rem' }}>
+            ⚠️ List is stale — new user missing. You must refresh manually.
+          </div>
+        )}
+        {listLoading ? (
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Loading…</div>
+        ) : (
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            {users.map((u) => (
+              <li key={u.id} style={{ display: 'flex', gap: '0.5rem', fontSize: '0.8rem', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 5, padding: '0.3rem 0.65rem' }}>
+                <span style={{ fontWeight: 600, minWidth: 28, color: '#9ca3af' }}>#{u.id}</span>
+                <span style={{ fontWeight: 600 }}>{u.name}</span>
+                <span style={{ color: '#9ca3af' }}>{u.email}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
-      <div className="form-group">
-        <label>Email</label>
-        <input className="form-control" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="alice@acme.com" />
-      </div>
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-        <button type="submit" className="btn btn-primary" disabled={loading}>
-          {loading ? <><span className="spinner" style={{ display: 'inline-block', marginRight: 6, width: 12, height: 12, borderWidth: 1.5 }} />Saving…</> : 'Create User'}
-        </button>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setName(''); setEmail(''); setError(null); setSuccess(null); }}>
-          ↺ Reset Form
-        </button>
-      </div>
-      {error   && <div className="error-box"   style={{ marginTop: '0.5rem' }}>{error}</div>}
-      {success && <div className="success-box" style={{ marginTop: '0.5rem' }}>{success}</div>}
-    </form>
+    </div>
   );
 }
 
@@ -93,6 +139,14 @@ function AfterCreateForm() {
   const [name,  setName]  = useState('');
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState(null);
+
+  const [users,       setUsers]       = useState([]);
+  const [listLoading, setListLoading] = useState(true);
+  const [listStale,   setListStale]   = useState(false);
+
+  useEffect(() => {
+    api.getUsers().then((data) => { setUsers(data); setListLoading(false); });
+  }, []);
 
   const validateEmail = (value) => {
     const err = validate.email(value);
@@ -107,6 +161,7 @@ function AfterCreateForm() {
       setName('');
       setEmail('');
       setEmailError(null);
+      setListStale(true); // still stale — cache invalidation (B2) will fix this
     },
   });
 
@@ -116,40 +171,84 @@ function AfterCreateForm() {
     createUser.mutate({ name, email });
   };
 
+  const refreshList = () => {
+    setListLoading(true);
+    setListStale(false);
+    api.getUsers().then((data) => { setUsers(data); setListLoading(false); });
+  };
+
   return (
-    <form onSubmit={handleSubmit}>
-      <div className="form-group">
-        <label>Name</label>
-        <input className={`form-control${createUser.isError ? ' is-error' : ''}`} value={name} onChange={(e) => setName(e.target.value)} placeholder="Alice Johnson" />
+    <div>
+      {/* Demo flow hints */}
+      <div style={{ fontSize: '0.78rem', color: '#6b7280', background: '#f9fafb', border: '1px dashed #d1d5db', borderRadius: 6, padding: '0.5rem 0.75rem', marginBottom: '0.75rem', lineHeight: 1.6 }}>
+        <strong style={{ color: '#374151' }}>Demo flow:</strong>
+        {' '}1) Fill valid data → <em>Create User</em> → list stays stale (B2 fixes this).
+        {' '}2) Leave Name empty or 1 char → submit → error shown in UI.
       </div>
-      <div className="form-group">
-        <label>Email</label>
-        <input
-          className={`form-control${emailError ? ' is-error' : ''}`}
-          value={email}
-          onChange={(e) => { const val = e.target.value; setEmail(val); if (val) validateEmail(val); else setEmailError(null); }}
-          placeholder="alice@acme.com"
-        />
-        {emailError && <span className="field-error">{emailError}</span>}
-      </div>
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '0.4rem' }}>
-        <button type="submit" className="btn btn-primary" disabled={createUser.isPending}>
-          {createUser.isPending ? <><span className="spinner" style={{ display: 'inline-block', marginRight: 6, width: 12, height: 12, borderWidth: 1.5 }} />Saving…</> : 'Create User'}
-        </button>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => { createUser.reset(); setName(''); setEmail(''); setEmailError(null); }}>
-          ↺ Reset State
-        </button>
-      </div>
-      <MutationStateBadge status={createUser.status} />
-      {createUser.isError && (
-        <div className="error-box" style={{ marginTop: '0.5rem' }}>{createUser.error.message}</div>
-      )}
-      {createUser.isSuccess && (
-        <div className="success-box" style={{ marginTop: '0.5rem' }}>
-          Created: {createUser.data.name} (id={createUser.data.id})
+
+      <form onSubmit={handleSubmit}>
+        <div className="form-group">
+          <label>Name</label>
+          <input className={`form-control${createUser.isError ? ' is-error' : ''}`} value={name} onChange={(e) => setName(e.target.value)} placeholder="Alice Johnson" />
         </div>
-      )}
-    </form>
+        <div className="form-group">
+          <label>Email</label>
+          <input
+            className={`form-control${emailError ? ' is-error' : ''}`}
+            value={email}
+            onChange={(e) => { const val = e.target.value; setEmail(val); if (val) validateEmail(val); else setEmailError(null); }}
+            placeholder="alice@acme.com"
+          />
+          {emailError && <span className="field-error">{emailError}</span>}
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '0.4rem' }}>
+          <button type="submit" className="btn btn-primary" disabled={createUser.isPending}>
+            {createUser.isPending ? <><span className="spinner" style={{ display: 'inline-block', marginRight: 6, width: 12, height: 12, borderWidth: 1.5 }} />Saving…</> : 'Create User'}
+          </button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { createUser.reset(); setName(''); setEmail(''); setEmailError(null); setListStale(false); }}>
+            ↺ Reset State
+          </button>
+        </div>
+        <MutationStateBadge status={createUser.status} />
+        {createUser.isError && (
+          <div className="error-box" style={{ marginTop: '0.5rem' }}>{createUser.error.message}</div>
+        )}
+        {createUser.isSuccess && (
+          <div className="success-box" style={{ marginTop: '0.5rem' }}>
+            Created: {createUser.data.name} (id={createUser.data.id})
+          </div>
+        )}
+      </form>
+
+      <div style={{ marginTop: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Users ({users.length})
+          </div>
+          <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem', padding: '0.15rem 0.5rem' }} onClick={refreshList}>
+            ↻ Refresh List
+          </button>
+        </div>
+        {listStale && (
+          <div style={{ fontSize: '0.75rem', color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 5, padding: '0.35rem 0.65rem', marginBottom: '0.4rem' }}>
+            ⚠️ Same stale problem — cache invalidation (B2) makes this automatic.
+          </div>
+        )}
+        {listLoading ? (
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Loading…</div>
+        ) : (
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            {users.map((u) => (
+              <li key={u.id} style={{ display: 'flex', gap: '0.5rem', fontSize: '0.8rem', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 5, padding: '0.3rem 0.65rem' }}>
+                <span style={{ fontWeight: 600, minWidth: 28, color: '#9ca3af' }}>#{u.id}</span>
+                <span style={{ fontWeight: 600 }}>{u.name}</span>
+                <span style={{ color: '#9ca3af' }}>{u.email}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }
 
