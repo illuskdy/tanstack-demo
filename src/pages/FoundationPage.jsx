@@ -76,25 +76,44 @@ function UserListHook({ onFetch }) {
 
 // ── After + TanStack Query ───────────────────────────────
 function UserListQuery({ onFetch }) {
-  const { data, isPending, isError, error } = useQuery({
+  const [cacheHit, setCacheHit] = useState(false);
+
+  const { data, isPending, isError, error, isFetching } = useQuery({
     queryKey: ['foundation-users'],
     queryFn:  async () => { if (onFetch) onFetch(); return api.getUsers(); },
     staleTime: 1000 * 60,
   });
+
+  // Detect cache hit on mount: data available immediately, no fetch triggered
+  useEffect(() => {
+    if (!isPending && !isFetching) {
+      setCacheHit(true);
+      const t = setTimeout(() => setCacheHit(false), 2000);
+      return () => clearTimeout(t);
+    }
+  }, []); // intentionally runs only on mount
+
   if (isPending) return <div className="loading-state"><div className="spinner" /> Fetching from server…</div>;
   if (isError)   return <div className="error-box">{error.message}</div>;
   return (
-    <table className="user-table">
-      <thead><tr><th>Name</th><th>Role</th></tr></thead>
-      <tbody>
-        {data.map((u) => (
-          <tr key={u.id}>
-            <td>{u.name}</td>
-            <td><span className={`role-badge role-${u.role}`}>{u.role}</span></td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <>
+      {cacheHit && (
+        <div style={{ marginBottom: '0.4rem', fontSize: '0.75rem', fontWeight: 700, color: '#16a34a' }}>
+          ⚡ From cache — no server request!
+        </div>
+      )}
+      <table className="user-table">
+        <thead><tr><th>Name</th><th>Role</th></tr></thead>
+        <tbody>
+          {data.map((u) => (
+            <tr key={u.id}>
+              <td>{u.name}</td>
+              <td><span className={`role-badge role-${u.role}`}>{u.role}</span></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
   );
 }
 

@@ -39,7 +39,18 @@ function BrokenFetchDemo() {
         </button>
       </div>
       {tab === 'other' && (
-        <div className="empty-state">📋 Other page — click "Go to List" to go back</div>
+        <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 8, padding: '1rem' }}>
+          <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#475569', marginBottom: '0.5rem' }}>📋 Dashboard (other page)</div>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            {['Revenue', 'Orders', 'Users'].map((k) => (
+              <div key={k} style={{ flex: 1, background: 'white', borderRadius: 6, padding: '0.5rem 0.75rem', border: '1px solid #e2e8f0', fontSize: '0.75rem', color: '#94a3b8' }}>
+                <div style={{ fontWeight: 600, color: '#64748b' }}>{k}</div>
+                <div style={{ fontSize: '1rem', fontWeight: 700, color: '#cbd5e1' }}>—</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: '0.5rem', fontSize: '0.72rem', color: '#94a3b8' }}>← click "Go to List" to navigate back</div>
+        </div>
       )}
       {tab === 'list' && loading && (
         <div className="loading-state"><div className="spinner" /> Fetching users…</div>
@@ -59,6 +70,8 @@ function BrokenFetchDemo() {
 // ── After: TanStack Query inner component ─────────────────
 function TanStackFetchInner({ onFetch }) {
   const wasFetchingRef = useRef(false);
+  const [cacheHit, setCacheHit] = useState(false);
+
   const { data: users, isPending, refetch, isFetching } = useQuery({
     queryKey: ['a1-after-users'],
     queryFn: () => api.getUsers(),
@@ -70,6 +83,15 @@ function TanStackFetchInner({ onFetch }) {
     wasFetchingRef.current = isFetching;
   }, [isFetching, onFetch]);
 
+  // Detect cache hit: component mounted with data already present (no fetch needed)
+  useEffect(() => {
+    if (!isPending && !isFetching) {
+      setCacheHit(true);
+      const t = setTimeout(() => setCacheHit(false), 2000);
+      return () => clearTimeout(t);
+    }
+  }, []); // intentionally runs only on mount
+
   return (
     <>
       <div className="demo-controls" style={{ marginBottom: '0.5rem' }}>
@@ -79,6 +101,11 @@ function TanStackFetchInner({ onFetch }) {
         {isFetching && (
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
             <span className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} /> Fetching…
+          </span>
+        )}
+        {cacheHit && (
+          <span style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3 }}>
+            ⚡ From cache — instant!
           </span>
         )}
       </div>
@@ -122,7 +149,18 @@ function TanStackFetchDemo() {
         </button>
       </div>
       {tab === 'other' && (
-        <div className="empty-state">📋 Other page — click "Go to List" to go back</div>
+        <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 8, padding: '1rem' }}>
+          <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#475569', marginBottom: '0.5rem' }}>📋 Dashboard (other page)</div>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            {['Revenue', 'Orders', 'Users'].map((k) => (
+              <div key={k} style={{ flex: 1, background: 'white', borderRadius: 6, padding: '0.5rem 0.75rem', border: '1px solid #e2e8f0', fontSize: '0.75rem', color: '#94a3b8' }}>
+                <div style={{ fontWeight: 600, color: '#64748b' }}>{k}</div>
+                <div style={{ fontSize: '1rem', fontWeight: 700, color: '#cbd5e1' }}>—</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: '0.5rem', fontSize: '0.72rem', color: '#94a3b8' }}>← click "Go to List" to navigate back</div>
+        </div>
       )}
       {tab === 'list' && (
         <TanStackFetchInner

@@ -3,6 +3,38 @@ import { useQuery } from '@tanstack/react-query';
 import CodeBlock from '../components/CodeBlock';
 import { api } from '../mockApi';
 
+// ── Live query status badge ───────────────────────────
+function QueryLifecycleBadge({ status, isFetching, isStale, dataUpdatedAt }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const ageSec = dataUpdatedAt ? Math.round((Date.now() - dataUpdatedAt) / 1000) : null;
+  const age    = ageSec != null ? ` (${ageSec}s ago)` : '';
+
+  let color, label;
+  if (status === 'pending')   { color = '#9ca3af'; label = '● pending'; }
+  else if (isFetching)        { color = '#3b82f6'; label = '● fetching…'; }
+  else if (isStale)           { color = '#f59e0b'; label = `● stale${age}`; }
+  else                        { color = '#22c55e'; label = `● fresh${age}`; }
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      marginTop: '0.6rem', padding: '0.3rem 0.65rem',
+      background: '#f9fafb', borderRadius: 6, border: '1px solid #e5e7eb',
+      fontSize: '0.76rem',
+    }}>
+      <span style={{ color, fontWeight: 700, fontFamily: 'monospace' }}>{label}</span>
+      <span style={{ color: '#9ca3af', fontFamily: 'monospace', fontSize: '0.68rem' }}>
+        queryKey: ['a2-users']
+      </span>
+    </div>
+  );
+}
+
 // ── Before: raw useEffect ─────────────────────────────
 function BeforeList({ onFetch }) {
   const [data, setData]     = useState(null);
@@ -37,10 +69,10 @@ function BeforeList({ onFetch }) {
 
 // ── After: useQuery with manual refresh ───────────────────
 function AfterList({ onFetch }) {
-  const { data, isPending, isError, error, isFetching, refetch } = useQuery({
+  const { data, isPending, isError, error, isFetching, refetch, isStale, status, dataUpdatedAt } = useQuery({
     queryKey: ['a2-users'],
     queryFn:  api.getUsers,
-    staleTime: 1000 * 60,
+    staleTime: 1000 * 20, // 20 s so you can watch fresh→stale live in the demo
   });
 
   const wasFetchingRef = useRef(false);
@@ -79,6 +111,12 @@ function AfterList({ onFetch }) {
           ))}</tbody>
         </table>
       )}
+      <QueryLifecycleBadge
+        status={status}
+        isFetching={isFetching}
+        isStale={isStale}
+        dataUpdatedAt={dataUpdatedAt}
+      />
     </>
   );
 }
@@ -318,10 +356,11 @@ function UsersList() {
       </div>
 
       <div className="insight">
-        <strong>Watch the counters:</strong> Click "Simulate Navigation" several times on each panel.
-        The Before counter climbs every time. The After counter stays at 1 — the cache is serving
-        subsequent renders. The Devtools (bottom-right) shows the query status: fetching → fresh → stale.
-        Use <strong>Manual Refresh</strong> in the After panel to force a fresh fetch on demand.
+        <strong>Watch the counters and the status badge:</strong> Click "Simulate Navigation" on each panel.
+        The Before counter climbs every time. The After counter stays at 1 — the cache serves subsequent renders.
+        The <strong>status badge</strong> in the After panel shows the live query lifecycle:
+        <code> ● fetching → ● fresh → ● stale</code> (staleTime is 20 s here so you can watch the transition).
+        After it goes stale, click "Manual Refresh" to see it cycle back through fetching → fresh.
       </div>
 
       {/* The 4 core fields */}

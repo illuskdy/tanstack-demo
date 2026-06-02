@@ -4,6 +4,7 @@ import { api } from '../../mockApi';
 export function useDeleteUser() {
   const qc = useQueryClient();
   return useMutation({
+    mutationKey: ['deleteUser'],
     mutationFn: api.deleteUser,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['aio-users'] }),
   });

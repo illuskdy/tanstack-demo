@@ -4,6 +4,41 @@ import CodeBlock from '../components/CodeBlock';
 import { api } from '../mockApi';
 import { validate } from '../utils/validation';
 
+// ── Mutation state machine visualiser ────────────────
+const MUTATION_STATES = [
+  { key: 'idle',    label: 'idle',    color: '#9ca3af', bg: '#f9fafb' },
+  { key: 'pending', label: 'pending', color: '#3b82f6', bg: '#eff6ff' },
+  { key: 'success', label: 'success', color: '#16a34a', bg: '#f0fdf4' },
+  { key: 'error',   label: 'error',   color: '#dc2626', bg: '#fef2f2' },
+];
+
+function MutationStateBadge({ status }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+      {MUTATION_STATES.filter(s => s.key !== 'error' || status === 'error').map((s, i, arr) => (
+        <span key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <span style={{
+            padding: '0.15rem 0.55rem',
+            borderRadius: 999,
+            fontSize: '0.72rem',
+            fontWeight: status === s.key ? 700 : 400,
+            fontFamily: 'monospace',
+            background: status === s.key ? s.bg : 'transparent',
+            color: status === s.key ? s.color : '#d1d5db',
+            border: `1.5px solid ${status === s.key ? s.color : '#e5e7eb'}`,
+            transition: 'all 0.2s',
+          }}>
+            {status === s.key && '● '}{s.label}
+          </span>
+          {i < arr.length - 1 && (
+            <span style={{ color: '#d1d5db', fontSize: '0.7rem' }}>→</span>
+          )}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // ── Before: manual form state ─────────────────────────
 function BeforeCreateForm() {
   const [name,  setName]  = useState('');
@@ -66,6 +101,7 @@ function AfterCreateForm() {
   };
 
   const createUser = useMutation({
+    mutationKey: ['b1-createUser'],
     mutationFn: (newUser) => api.createUser(newUser),
     onSuccess: () => {
       setName('');
@@ -91,22 +127,20 @@ function AfterCreateForm() {
         <input
           className={`form-control${emailError ? ' is-error' : ''}`}
           value={email}
-          onChange={(e) => { setEmail(e.target.value); if (emailError) validateEmail(e.target.value); }}
+          onChange={(e) => { const val = e.target.value; setEmail(val); if (val) validateEmail(val); else setEmailError(null); }}
           placeholder="alice@acme.com"
         />
         {emailError && <span className="field-error">{emailError}</span>}
       </div>
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '0.4rem' }}>
         <button type="submit" className="btn btn-primary" disabled={createUser.isPending}>
           {createUser.isPending ? <><span className="spinner" style={{ display: 'inline-block', marginRight: 6, width: 12, height: 12, borderWidth: 1.5 }} />Saving…</> : 'Create User'}
         </button>
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => { createUser.reset(); setName(''); setEmail(''); setEmailError(null); }}>
           ↺ Reset State
         </button>
-        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-          Status: <strong>{createUser.status}</strong>
-        </span>
       </div>
+      <MutationStateBadge status={createUser.status} />
       {createUser.isError && (
         <div className="error-box" style={{ marginTop: '0.5rem' }}>{createUser.error.message}</div>
       )}

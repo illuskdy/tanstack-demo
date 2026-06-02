@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import CodeBlock from '../components/CodeBlock';
 import { api } from '../mockApi';
 
@@ -12,13 +12,13 @@ function BeforeListDetail({ onFetch }) {
   const [detailLoading, setDL]      = useState(false);
 
   // Fetch list on mount
-  useState(() => {
+  useEffect(() => {
     let c = false;
     setLL(true);
     onFetch('list');
     api.getUsers().then((d) => { if (!c) { setUsers(d); setLL(false); } });
     return () => { c = true; };
-  });
+  }, []);
 
   const selectUser = (id) => {
     setSelectedId(id);
@@ -84,11 +84,20 @@ function AfterUserDetail({ userId, onFetch }) {
 
 function AfterListDetail({ onFetch }) {
   const [selectedId, setSelectedId] = useState(null);
+  const queryClient = useQueryClient();
+
   const { data: users, isPending, isFetching, refetch } = useQuery({
     queryKey: ['a3-users'],
     queryFn:  async () => { onFetch('list'); return api.getUsers(); },
     staleTime: 1000 * 60,
   });
+
+  const handleSelect = (id) => {
+    // Check whether this user's detail is already in the cache
+    const cached = queryClient.getQueryData(['a3-users', id]);
+    if (cached) onFetch(`user/${id}`, 'cache');
+    setSelectedId(id);
+  };
 
   if (isPending) return <div className="loading-state"><div className="spinner" /> Loading list…</div>;
   return (
@@ -109,7 +118,7 @@ function AfterListDetail({ onFetch }) {
             <div
               key={u.id}
               className={`user-list-item${selectedId === u.id ? ' selected' : ''}`}
-              onClick={() => setSelectedId(u.id)}
+              onClick={() => handleSelect(u.id)}
             >
               <span>{u.name}</span>
               <span style={{ fontSize: '0.7rem', color: '#6b7280' }}>→</span>
@@ -130,8 +139,10 @@ export default function TopicA3Page() {
   const afterFetchLog = useRef([]);
   const [afterLog, setAfterLog] = useState([]);
 
-  const addLog = (logRef, setLogFn, label) => {
-    const entry = `${new Date().toLocaleTimeString()} → fetched ${label}`;
+  const addLog = (logRef, setLogFn, label, type = 'fetch') => {
+    const icon  = type === 'cache' ? '⚡' : '↓';
+    const verb  = type === 'cache' ? 'cache hit:' : 'fetched:';
+    const entry = { text: `${new Date().toLocaleTimeString()} ${icon} ${verb} ${label}`, type };
     logRef.current = [entry, ...logRef.current].slice(0, 8);
     setLogFn([...logRef.current]);
   };
@@ -260,9 +271,9 @@ useQuery({
             <BeforeListDetail onFetch={(label) => addLog(fetchLog, setLog, label)} />
             <div style={{ marginTop: '0.75rem' }}>
               <div className="panel-label">Request Log</div>
-              <div style={{ background: '#1e1e2e', borderRadius: 6, padding: '0.5rem 0.75rem', fontFamily: 'Fira Code, monospace', fontSize: '0.72rem', color: '#a6e3a1', maxHeight: 120, overflowY: 'auto' }}>
+              <div style={{ background: '#1e1e2e', borderRadius: 6, padding: '0.5rem 0.75rem', fontFamily: 'Fira Code, monospace', fontSize: '0.72rem', maxHeight: 120, overflowY: 'auto' }}>
                 {log.length === 0 && <div style={{ color: '#6b7280' }}>No requests yet…</div>}
-                {log.map((l, i) => <div key={i}>{l}</div>)}
+                {log.map((l, i) => <div key={i} style={{ color: '#a6e3a1' }}>{l.text ?? l}</div>)}
               </div>
             </div>
           </div>
@@ -289,9 +300,13 @@ useQuery({
             <AfterListDetail onFetch={(label) => addLog(afterFetchLog, setAfterLog, label)} />
             <div style={{ marginTop: '0.75rem' }}>
               <div className="panel-label">Request Log</div>
-              <div style={{ background: '#1e1e2e', borderRadius: 6, padding: '0.5rem 0.75rem', fontFamily: 'Fira Code, monospace', fontSize: '0.72rem', color: '#a6e3a1', maxHeight: 120, overflowY: 'auto' }}>
+              <div style={{ background: '#1e1e2e', borderRadius: 6, padding: '0.5rem 0.75rem', fontFamily: 'Fira Code, monospace', fontSize: '0.72rem', maxHeight: 120, overflowY: 'auto' }}>
                 {afterLog.length === 0 && <div style={{ color: '#6b7280' }}>No requests yet…</div>}
-                {afterLog.map((l, i) => <div key={i}>{l}</div>)}
+                {afterLog.map((l, i) => (
+                  <div key={i} style={{ color: l.type === 'cache' ? '#6ee7b7' : '#a6e3a1' }}>
+                    {l.text ?? l}
+                  </div>
+                ))}
               </div>
             </div>
           </div>

@@ -5,7 +5,7 @@ import { useUser } from '../hooks/queries/useUser';
 import { useCreateUser } from '../hooks/mutations/useCreateUser';
 import { useUpdateUser } from '../hooks/mutations/useUpdateUser';
 import { useDeleteUser } from '../hooks/mutations/useDeleteUser';
-import { validateUserForm, hasErrors } from '../utils/validation';
+import { validateUserForm, hasErrors, validate } from '../utils/validation';
 
 // ── User Detail Panel ─────────────────────────────────
 function UserDetail({ userId, onClose, onEdit }) {
@@ -91,7 +91,11 @@ function EditUserForm({ user, onDone }) {
             <input
               className={`form-control${errors.email ? ' is-error' : ''}`}
               value={email}
-              onChange={(e) => { setEmail(e.target.value); clearError('email'); }}
+              onChange={(e) => {
+                const val = e.target.value;
+                setEmail(val);
+                setErrors((prev) => ({ ...prev, email: val ? validate.email(val) : null }));
+              }}
               placeholder="user@example.com"
             />
             {errors.email && <div className="field-error">{errors.email}</div>}
@@ -170,7 +174,11 @@ function CreateUserForm({ onDone }) {
             <input
               className={`form-control${errors.email ? ' is-error' : ''}`}
               value={email}
-              onChange={(e) => { setEmail(e.target.value); clearError('email'); }}
+              onChange={(e) => {
+                const val = e.target.value;
+                setEmail(val);
+                setErrors((prev) => ({ ...prev, email: val ? validate.email(val) : null }));
+              }}
               placeholder="jane@acme.com"
             />
             {errors.email && <div className="field-error">{errors.email}</div>}

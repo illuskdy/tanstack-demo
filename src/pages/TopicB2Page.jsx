@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import CodeBlock from '../components/CodeBlock';
 import { api } from '../mockApi';
@@ -88,10 +88,16 @@ function AfterUserList() {
   const [emailError, setEmailError] = useState(null);
   const [msg, setMsg]     = useState('');
 
-  const { data: users, isPending, isFetching, refetch } = useQuery({
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const { data: users, isPending, isFetching, refetch, isStale, dataUpdatedAt } = useQuery({
     queryKey: ['b2-users'],
     queryFn:  api.getUsers,
-    staleTime: 1000 * 60,
+    staleTime: 1000 * 30,
   });
 
   const validateEmail = (value) => {
@@ -101,6 +107,7 @@ function AfterUserList() {
   };
 
   const createUser = useMutation({
+    mutationKey: ['b2-createUser'],
     mutationFn: (data) => api.createUser(data),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['b2-users'] });
@@ -113,6 +120,7 @@ function AfterUserList() {
   });
 
   const deleteUser = useMutation({
+    mutationKey: ['b2-deleteUser'],
     mutationFn: (id) => api.deleteUser(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['b2-users'] });
@@ -145,7 +153,7 @@ function AfterUserList() {
             className={`form-control${emailError ? ' is-error' : ''}`}
             style={{ maxWidth: 185 }}
             value={email}
-            onChange={(e) => { setEmail(e.target.value); if (emailError) validateEmail(e.target.value); }}
+            onChange={(e) => { const val = e.target.value; setEmail(val); if (val) validateEmail(val); else setEmailError(null); }}
             placeholder="Email (optional)"
           />
           {emailError && (
@@ -191,6 +199,29 @@ function AfterUserList() {
           </table>
         )
       }
+
+      {/* Live cache-age footer */}
+      {!isPending && dataUpdatedAt && (() => {
+        const ageSec = Math.round((Date.now() - dataUpdatedAt) / 1000);
+        const staleColor = isStale ? '#f59e0b' : '#22c55e';
+        const staleLabel = isStale ? '● stale' : '● fresh';
+        return (
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            marginTop: '0.5rem', padding: '0.28rem 0.65rem',
+            background: '#f9fafb', borderRadius: 6, border: '1px solid #e5e7eb',
+            fontSize: '0.72rem',
+          }}>
+            <span style={{ color: staleColor, fontWeight: 700, fontFamily: 'monospace' }}>{staleLabel}</span>
+            <span style={{ color: '#6b7280' }}>last synced {ageSec}s ago</span>
+            {isFetching && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#3b82f6', fontWeight: 600 }}>
+                <span className="spinner" style={{ width: 9, height: 9, borderWidth: 1.5 }} /> syncing…
+              </span>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
